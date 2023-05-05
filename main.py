@@ -4,11 +4,15 @@ import eink
 import ntptime
 import json
 import urequests as requests
+import rp2
+import settings
 from machine import Timer
 
-WIFI_SSID = 'AbsorbantSponge'
-WIFI_PASSWD = 'TD2xdM2p8lWEKmPMU85N'
-DATA_URL = 'https://api.openweathermap.org/data/2.5/weather?q=Winnipeg,Manitoba&units=metric&appid=939601164a27fc16736060d4eb17b689'
+WIFI_SSID = settings.WIFI_SSID
+WIFI_PASSWD = settings.WIFI_PASSWD
+DATA_URL = 'https://api.openweathermap.org/data/2.5/weather?q=Winnipeg,Manitoba&units=metric&appid=' + settings.APP_ID
+
+rp2.country('CA')
 
 epd = eink.EPD_2in9_B()
 wlan = None
@@ -33,7 +37,13 @@ def connect():
     if wlan is None:
         wlan = network.WLAN(network.STA_IF)
 
+    if wlan.isconnected():
+        print("Already connected.")
+        set_time()
+        return
+
     wlan.active(True)
+    wlan.config(pm=0xa11140)
     wlan.connect(WIFI_SSID, WIFI_PASSWD)
 
     while not wlan.isconnected() and wlan.status() >= 0:
@@ -74,6 +84,9 @@ def show_error(msg=None):
     global time_set
     global epd
 
+    print(f'ERROR: {msg}')
+
+    epd.reset()
     epd.Clear(0xff, 0xff)
 
     epd.imageblack.fill(0xff)
@@ -81,17 +94,18 @@ def show_error(msg=None):
     epd.imagered.text("Error :(", 0, 10, 0x00)
     epd.imagered.text("Faild to load", 0, 25, 0x00)
 
-    line = 3  # Current blank line
-    if time_set:
+    try:
         now = time.localtime()
         epd.imageblack.text(f"{now[0]}-{now[1]}-{now[2]}", 0, 40, 0x00)
         epd.imageblack.text(f"{now[3]}:{now[4]}:{now[5]}", 0, 55, 0x00)
-        line = line + 2
+    except:
+        pass
 
     if msg is not None:
-        epd.imagered.text(msg, 0, line * 15)
+        epd.imagered.text(msg, 0, 70, 0x00)
 
     epd.display()
+    epd.sleep()
 
 
 def load_weather():
@@ -137,7 +151,25 @@ def tick(_: Timer):
     global wlan
 
     if wlan is None or not wlan.isconnected():
-        connect()
+        # WLAN is unstable for some reason. Keep trying.
+        counter = 0
+        while counter < 10:
+            try:
+                connect()
+                if wlan is not None and wlan.isconnected():
+                    break
+
+                if wlan is not None:
+                    print('Connect failed, disconnect.')
+                    wlan.disconnect()
+
+            except OSError as e:
+                if wlan is not None:
+                    print('Error, disconnect.')
+                    print(e)
+                    wlan.disconnect()
+
+            counter += 1
 
     if wlan is None or not wlan.isconnected():
         show_error('No network')
