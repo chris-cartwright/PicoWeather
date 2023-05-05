@@ -105,6 +105,18 @@ def connect():
 def update_display(weather):
     global epd, black_proxy, red_proxy
 
+    limits = load_limits()
+
+    def within_limits(name, value):
+        lims = limits[name]
+        if value <= lims['low']:
+            return False
+
+        if value >= lims['high']:
+            return False
+
+        return True
+
     epd.imageblack.fill(0xff)
     epd.imagered.fill(0xff)
 
@@ -118,15 +130,19 @@ def update_display(weather):
     line = 10
 
     # Current temperature
-    s = str(round(weather['main']['temp']))
-    center_string(w50black, s, line)
-    w50black.printstring(s)
+    val = round(weather['main']['temp'])
+    writer = w50black if within_limits('temp', val) else w50red
+    s = str(val)
+    center_string(writer, s, line)
+    writer.printstring(s)
     line += 55
 
     # Humidity
-    s = f"{weather['main']['humidity']}%"
-    center_string(w35black, s, line)
-    w35black.printstring(s)
+    val = weather['main']['humidity']
+    writer = w35black if within_limits('humidity', val) else w35red
+    s = f"{val}%"
+    center_string(writer, s, line)
+    writer.printstring(s)
     line += 40
 
     # Feels like
@@ -143,13 +159,17 @@ def update_display(weather):
     if 'gust' in weather['wind']:
         colw = round(black_proxy.width * 0.6)
         subcolw = round(colw * 0.66)
-        s = f"{round(weather['wind']['gust'])}"
-        Writer.set_textpos(black_proxy, line, colw)
-        w35black.printstring(s)
+        val = round(weather['wind']['gust'])
+        writer = w35black if within_limits('gusts', val) else w35red
+        s = f"{val}"
+        Writer.set_textpos(writer.device, line, colw)
+        writer.printstring(s)
 
-    s = str(round(weather['wind']['speed']))
-    right_string(w35black, s, line, dw=subcolw)
-    w35black.printstring(s)
+    val = round(weather['wind']['speed'])
+    writer = w35black if within_limits('wind', val) else w35red
+    s = str(val)
+    right_string(writer, s, line, dw=subcolw)
+    writer.printstring(s)
     Writer.set_textpos(black_proxy, line, subcolw + 5)
     w10black.printstring('km/h')
     Writer.set_textpos(black_proxy, line + 15, subcolw + 5)
@@ -240,6 +260,33 @@ def update_weather():
         return None
 
     return json.loads(response.text)
+
+
+def load_limits():
+    try:
+        f = open('limits.json', 'r')
+        data = json.load(f)
+        f.close()
+
+        return data
+
+    except OSError:
+        pass
+    except ValueError:
+        pass
+
+    return {
+        'temp': {'low': -15, 'high': 25},
+        'humidity': {'low': -1, 'high': 80},
+        'wind': {'low': -1, 'high': 10},
+        'gusts': {'low': -1, 'high': 20}
+    }
+
+
+def save_limits(limits):
+    f = open('limits.json', 'w')
+    json.dump(limits, f)
+    f.close()
 
 
 def tick(_: Timer):
