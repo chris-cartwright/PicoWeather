@@ -7,6 +7,8 @@ import urequests as requests
 import rp2
 import settings
 from machine import Timer
+from writer import Writer
+from fonts import arial10, arial35, arial50
 
 WIFI_SSID = settings.WIFI_SSID
 WIFI_PASSWD = settings.WIFI_PASSWD
@@ -14,9 +16,52 @@ DATA_URL = 'https://api.openweathermap.org/data/2.5/weather?q=Winnipeg,Manitoba&
 
 rp2.country('CA')
 
+
+class ProxyDevice:
+    def __init__(self, device):
+        self.device = device
+        self.height = 296
+        self.width = 152
+
+    def __getattr__(self, attr):
+        return getattr(self.device, attr)
+
+
 epd = eink.EPD_2in9_B()
+epd.invert_x = True
+epd.invert_y = True
+black_proxy = ProxyDevice(epd.imageblack)
+red_proxy = ProxyDevice(epd.imagered)
 wlan = None
 time_set = False
+
+
+def degrees_to_compass(deg):
+    sectors = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+               "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW", "N"]
+    return sectors[int(round((deg % 360) / 22.5, 0))]
+
+
+def center_string(font, s, x, dw=None):
+    if dw is None:
+        dw = font.device.width
+
+    dw = int(dw)
+    w = font.stringlen(s)
+    c = (dw / 2) - (w / 2)
+    c = int(round(c, 0))
+    Writer.set_textpos(font.device, x, c)
+
+
+def right_string(font, s, x, dw=None):
+    if dw is None:
+        dw = font.device.width
+
+    dw = int(dw)
+    w = font.stringlen(s)
+    l = dw - w
+    l = int(round(l, 0))
+    Writer.set_textpos(font.device, x, l)
 
 
 def set_time():
@@ -58,26 +103,76 @@ def connect():
 
 
 def update_display(weather):
-    global epd
-
-    epd.Clear(0xff, 0xff)
+    global epd, black_proxy, red_proxy
 
     epd.imageblack.fill(0xff)
     epd.imagered.fill(0xff)
-    current = f"Current: {round(weather['main']['temp'])}"
-    print(current)
-    epd.imageblack.text(current, 0, 10, 0x00)
-    feels_like = f"Feels like: {round(weather['main']['feels_like'])}"
-    print(feels_like)
-    epd.imageblack.text(feels_like, 0, 25, 0x00)
-    humidity = f"Humidity: {weather['main']['humidity']}%"
-    print(humidity)
-    epd.imageblack.text(humidity, 0, 40, 0x00)
-    epd.imageblack.text(
-       f"Wind: {weather['wind']['speed']}km/h @ {weather['wind']['deg']}deg", 0, 55)
-    sunset = time.localtime(weather['sys']['sunset'])
-    epd.imageblack.text(f"Sunset: {sunset[3] - 12}:{sunset[4]}", 0, 70, 0x00)
+
+    w50black = Writer(black_proxy, arial50)
+    w50red = Writer(red_proxy, arial50)
+    w35black = Writer(black_proxy, arial35)
+    w35red = Writer(red_proxy, arial35)
+    w10black = Writer(black_proxy, arial10)
+    w10red = Writer(red_proxy, arial10)
+
+    line = 10
+
+    # Current temperature
+    s = str(round(weather['main']['temp']))
+    center_string(w50black, s, line)
+    w50black.printstring(s)
+    line += 55
+
+    # Humidity
+    s = f"{weather['main']['humidity']}%"
+    center_string(w35black, s, line)
+    w35black.printstring(s)
+    line += 40
+
+    # Feels like
+    s = 'Feels like'
+    right_string(w10black, s, line + 10, black_proxy.width / 2 - 10)
+    w10black.printstring(s)
+    Writer.set_textpos(black_proxy, line, round(black_proxy.width / 2))
+    w35black.printstring(str(round(weather['main']['feels_like'])))
+    line += 40
+
+    # Wind speed + direction
+    colw = black_proxy.width
+    subcolw = round(colw / 2)
+    if 'gust' in weather['wind']:
+        colw = round(black_proxy.width * 0.6)
+        subcolw = round(colw * 0.66)
+        s = f"{round(weather['wind']['gust'])}"
+        Writer.set_textpos(black_proxy, line, colw)
+        w35black.printstring(s)
+
+    s = str(round(weather['wind']['speed']))
+    right_string(w35black, s, line, dw=subcolw)
+    w35black.printstring(s)
+    Writer.set_textpos(black_proxy, line, subcolw + 5)
+    w10black.printstring('km/h')
+    Writer.set_textpos(black_proxy, line + 15, subcolw + 5)
+    w10black.printstring(degrees_to_compass(weather['wind']['deg']))
+    line += 40
+
+    # Sunrise and sunset
+    ss = time.gmtime(weather['sys']['sunset'])
+    s = f"Sunset {ss[3] + 6}:{ss[4]}"  # lazy timezone conversion
+    center_string(w10black, s, line)
+    w10black.printstring(s)
+    line += 15
+
+    # Overcast?
+    s = ', '.join([entry['description'] for entry in weather['weather']])
+    # Use up a little extra space at the bottom
+    Writer.set_textpos(black_proxy, line + 10, 0)
+    w35black.printstring(s)
+
+    epd.reset()
+    epd.Clear(0xff, 0xff)
     epd.display()
+    epd.sleep()
 
 
 def show_error(msg=None):
@@ -188,42 +283,7 @@ def tick(_: Timer):
         show_error('No data')
 
 
-def demo():
-    epd = eink.EPD_2in9_B()
-    epd.Clear(0xff, 0xff)
-
-    epd.imageblack.fill(0xff)
-    epd.imagered.fill(0xff)
-    epd.imageblack.text("Waveshare", 0, 10, 0x00)
-    epd.imagered.text("ePaper-2.66-B", 0, 25, 0x00)
-    epd.imageblack.text("RPi Pico", 0, 40, 0x00)
-    epd.imagered.text("Hello World", 0, 55, 0x00)
-    epd.display()
-    epd.delay_ms(2000)
-
-    epd.imagered.vline(10, 90, 40, 0x00)
-    epd.imagered.vline(90, 90, 40, 0x00)
-    epd.imageblack.hline(10, 90, 80, 0x00)
-    epd.imageblack.hline(10, 130, 80, 0x00)
-    epd.imagered.line(10, 90, 90, 130, 0x00)
-    epd.imageblack.line(90, 90, 10, 130, 0x00)
-    epd.display()
-    epd.delay_ms(2000)
-
-    epd.imageblack.rect(10, 150, 40, 40, 0x00)
-    epd.imagered.fill_rect(60, 150, 40, 40, 0x00)
-    epd.display()
-    epd.delay_ms(2000)
-
-
-    epd.Clear(0xff, 0xff)
-    epd.delay_ms(2000)
-    print("sleep")
-    epd.sleep()
-
-
 ticker = Timer()
 p = 1000 * 60 * 30  # 30 minutes
 ticker.init(period=p, mode=Timer.PERIODIC, callback=tick)
 tick(ticker)
-#demo()
