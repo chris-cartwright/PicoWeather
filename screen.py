@@ -1,5 +1,6 @@
 import eink
 import time
+import gc
 from writer import Writer
 from fonts import arial10, arial35, arial50
 
@@ -65,12 +66,18 @@ def update_display(weather, limits):
     epd.imageblack.fill(0xff)
     epd.imagered.fill(0xff)
 
+    gc.collect()
+    print("RAM free %d alloc %d", gc.mem_free(), gc.mem_alloc())
+
     w50black = Writer(black_proxy, arial50)
     w50red = Writer(red_proxy, arial50)
     w35black = Writer(black_proxy, arial35)
     w35red = Writer(red_proxy, arial35)
     w10black = Writer(black_proxy, arial10)
     w10red = Writer(red_proxy, arial10)
+
+    gc.collect()
+    print("RAM free %d alloc %d", gc.mem_free(), gc.mem_alloc())
 
     line = 10
 
