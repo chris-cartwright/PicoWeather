@@ -5,8 +5,8 @@ import json
 import urequests as requests
 import rp2
 import settings
+import machine
 from machine import Timer
-from machine import Pin
 from screen import show_error, update_display
 
 WIFI_SSID = settings.WIFI_SSID
@@ -15,24 +15,22 @@ DATA_URL = 'https://api.openweathermap.org/data/2.5/weather?q=Winnipeg,Manitoba&
 
 rp2.country('CA')
 
-
-pin_sensor = Pin(19, Pin.IN)
-pin_button = Pin(28, Pin.OUT)
-
 wlan = None
-time_set = False
+time_set = None
 
 
 def set_time():
     global time_set
     global wlan
 
-    if time_set is True:
+    now = time.time()
+    if time_set is not None and (now - time_set) < (60 * 24):
         return
 
     if wlan is not None and wlan.isconnected():
         ntptime.settime()
-        time_set = True
+        time_set = time.time()
+        print('NTP time set')
 
 
 def connect():
@@ -52,7 +50,7 @@ def connect():
 
     while not wlan.isconnected() and wlan.status() >= 0:
         print("Waiting to connect:")
-        time.sleep(1)
+        machine.idle()
 
     if wlan.isconnected():
         print("Connected.")
