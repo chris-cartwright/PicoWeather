@@ -30,7 +30,7 @@ def set_time():
     if wlan is not None and wlan.isconnected():
         ntptime.settime()
         time_set = time.time()
-        print('NTP time set')
+        print(f"NTP time set: {time.localtime()}")
 
 
 def connect():
@@ -40,7 +40,7 @@ def connect():
         wlan = network.WLAN(network.STA_IF)
 
     if wlan.isconnected():
-        print("Already connected.")
+        print("Connect: Already connected.")
         set_time()
         return
 
@@ -49,11 +49,10 @@ def connect():
     wlan.connect(WIFI_SSID, WIFI_PASSWD)
 
     while not wlan.isconnected() and wlan.status() >= 0:
-        print("Waiting to connect:")
         machine.idle()
 
     if wlan.isconnected():
-        print("Connected.")
+        print("Connect: Connected.")
         set_time()
     else:
         print(f"Error: {wlan.status()}")
@@ -150,7 +149,7 @@ def tick(_: Timer):
             counter += 1
 
     if wlan is None or not wlan.isconnected():
-        show_error('No network')
+        print('Error, no network.')
         return
 
     weather = load_weather()
