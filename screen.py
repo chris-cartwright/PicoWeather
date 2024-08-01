@@ -141,6 +141,12 @@ def update_display(weather, limits):
     Writer.set_textpos(black_proxy, line + 10, 0)
     w35black.printstring(s)
 
+    # Last update time; pinned at bottom
+    (year, month, day, hour, minute, second, *_)  = time.localtime()
+    s = f"{year}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}"
+    center_string(w10black, s, black_proxy.height - 10)
+    w10black.printstring(s)
+
     epd.reset()
     epd.Clear(0xff, 0xff)
     epd.display()
@@ -152,9 +158,6 @@ def show_error(msg=None):
     global epd
 
     print(f'ERROR: {msg}')
-
-    epd.reset()
-    epd.Clear(0xff, 0xff)
 
     epd.imageblack.fill(0xff)
     epd.imagered.fill(0xff)
@@ -171,5 +174,7 @@ def show_error(msg=None):
     if msg is not None:
         epd.imagered.text(msg, 0, 70, 0x00)
 
+    epd.reset()
+    epd.Clear(0xff, 0xff)
     epd.display()
     epd.sleep()
