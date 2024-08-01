@@ -1,14 +1,11 @@
 {
-    "python.linting.enabled": true,
     "python.analysis.typeshedPaths": [
         "~/.micropico-stubs/included"
     ],
-    "python.languageServer": "Pylance",
     "python.analysis.typeCheckingMode": "basic",
     "python.analysis.extraPaths": [
         "~/.micropico-stubs/included"
     ],
-    "micropico.syncFolder": "",
-    "micropico.openOnStart": false,
-    "micropico.rebootAfterUpload": false
+    "micropico.autoConnect": false,
+    "micropico.openOnStart": false
 }
