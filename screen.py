@@ -53,6 +53,8 @@ def right_string(font, s, x, dw=None):
 def update_display(weather, limits):
     global epd, black_proxy, red_proxy
 
+    gc.collect()
+
     def within_limits(name, value):
         lims = limits[name]
         if value <= lims['low']:
@@ -66,18 +68,12 @@ def update_display(weather, limits):
     epd.imageblack.fill(0xff)
     epd.imagered.fill(0xff)
 
-    gc.collect()
-    print("RAM free %d alloc %d", gc.mem_free(), gc.mem_alloc())
-
     w50black = Writer(black_proxy, arial50)
     w50red = Writer(red_proxy, arial50)
     w35black = Writer(black_proxy, arial35)
     w35red = Writer(red_proxy, arial35)
     w10black = Writer(black_proxy, arial10)
     w10red = Writer(red_proxy, arial10)
-
-    gc.collect()
-    print("RAM free %d alloc %d", gc.mem_free(), gc.mem_alloc())
 
     line = 10
 
@@ -151,6 +147,8 @@ def update_display(weather, limits):
     epd.Clear(0xff, 0xff)
     epd.display()
     epd.sleep()
+
+    gc.collect()
 
 
 def show_error(msg=None):
