@@ -6,7 +6,8 @@ import urequests as requests
 import rp2
 import settings
 import machine
-from machine import Timer
+import os
+from machine import Timer, Pin
 from screen import show_error, update_display
 
 WIFI_SSID = settings.WIFI_SSID
@@ -17,6 +18,9 @@ rp2.country('CA')
 
 wlan = None
 time_set = None
+
+debug = machine.UART(0, baudrate=9600, rx=Pin(1),tx=Pin(0))
+os.dupterm(debug)
 
 
 def set_time():
