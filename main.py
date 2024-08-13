@@ -19,8 +19,29 @@ rp2.country('CA')
 wlan = None
 time_set = None
 
-debug = machine.UART(0, baudrate=9600, rx=Pin(1),tx=Pin(0))
+battery = machine.ADC(28)
+charging = Pin('WL_GPIO2', Pin.IN)
+
+debug = machine.UART(0, baudrate=9600, rx=Pin(1), tx=Pin(0))
 os.dupterm(debug)
+
+
+def battery_stats():
+    low = settings.BATTERY_LOW
+    high = settings.BATTERY_HIGH
+
+    c = charging.value()
+
+    # Convert back to original precision, 12bit
+    reading = battery.read_u16() >> 4
+
+    return {
+        'charging': c == 1,
+        'reading': reading,
+        'low': low,
+        'high': high,
+        'level': (reading - low) / (high - low)
+    }
 
 
 def set_time():
@@ -34,7 +55,7 @@ def set_time():
     if wlan is not None and wlan.isconnected():
         ntptime.settime()
         time_set = time.time()
-        print(f"NTP time set: {time.localtime()}")
+        print(f'set_time: NTP time set: {time.localtime()}')
 
 
 def connect():
@@ -44,7 +65,7 @@ def connect():
         wlan = network.WLAN(network.STA_IF)
 
     if wlan.isconnected():
-        print("Connect: Already connected.")
+        print("connect: Already connected.")
         set_time()
         return
 
@@ -56,10 +77,10 @@ def connect():
         machine.idle()
 
     if wlan.isconnected():
-        print("Connect: Connected.")
+        print("connect: Connected.")
         set_time()
     else:
-        print(f"Error: {wlan.status()}")
+        print(f"connect: Error: {wlan.status()}")
 
 
 def load_weather():
@@ -129,8 +150,15 @@ def save_limits(limits):
 
 
 def tick(_: Timer):
+    print('tick: Begin')
     global wlan
 
+    if battery_stats()['level'] <= 0.1:
+        # Skip update if power is low. Screen is sensitive.
+        print('tick: Low power; skip screen refresh.')
+        return
+
+    print('tick: Battery OK')
     if wlan is None or not wlan.isconnected():
         # WLAN is unstable for some reason. Keep trying.
         counter = 0
@@ -141,19 +169,19 @@ def tick(_: Timer):
                     break
 
                 if wlan is not None:
-                    print('Connect failed, disconnect.')
+                    print('tick: Connect failed, disconnect.')
                     wlan.disconnect()
 
             except OSError as e:
                 if wlan is not None:
-                    print('Error, disconnect.')
+                    print('tick: Error, disconnect.')
                     print(e)
                     wlan.disconnect()
 
             counter += 1
 
     if wlan is None or not wlan.isconnected():
-        print('Error, no network.')
+        print('tick: Error, no network.')
         return
 
     weather = load_weather()
@@ -164,9 +192,11 @@ def tick(_: Timer):
             save_weather(weather)
 
     if weather is not None:
+        print('tick: Update screen')
         limits = load_limits()
-        update_display(weather, limits)
+        update_display(weather, limits, battery_stats())
     else:
+        print('tick: No data')
         show_error('No data')
 
 

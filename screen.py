@@ -50,7 +50,7 @@ def right_string(font, s, x, dw=None):
     Writer.set_textpos(font.device, x, l)
 
 
-def update_display(weather, limits):
+def update_display(weather, limits, battery_stats):
     global epd, black_proxy, red_proxy
 
     gc.collect()
@@ -137,11 +137,18 @@ def update_display(weather, limits):
     Writer.set_textpos(black_proxy, line + 10, 0)
     w35black.printstring(s)
 
-    # Last update time; pinned at bottom
+    # Last update time, voltage; pinned at bottom
+    line = black_proxy.height - 10
     (year, month, day, hour, minute, second, *_)  = time.localtime()
     s = f"{year}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}"
-    center_string(w10black, s, black_proxy.height - 10)
+    Writer.set_textpos(black_proxy, line, 0)
     w10black.printstring(s)
+
+    if not battery_stats['charging']:
+        p = battery_stats['level'] * 100
+        s = f"{p:.0f}%"
+        right_string(w10black, s, line)
+        w10black.printstring(s)
 
     epd.reset()
     epd.Clear(0xff, 0xff)
