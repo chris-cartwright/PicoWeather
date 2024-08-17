@@ -9,3 +9,18 @@ def empty_dir(dir):
 
         empty_dir(full_path)
         os.rmdir(full_path)
+
+def singleton(f):
+    running = False
+    
+    def call(*args, **kwargs):
+        nonlocal running
+        
+        if running:
+            return
+    
+        running = True
+        f(*args, **kwargs)
+        running = False
+    
+    return call

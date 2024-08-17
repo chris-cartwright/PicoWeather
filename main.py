@@ -9,18 +9,23 @@ import machine
 import os
 from machine import Timer, Pin
 from screen import show_error, update_display
+import micropython
+import util
 
 WIFI_SSID = settings.WIFI_SSID
 WIFI_PASSWD = settings.WIFI_PASSWD
 DATA_URL = 'https://api.openweathermap.org/data/2.5/weather?q=Winnipeg,Manitoba&units=metric&appid=' + settings.APP_ID
+MAX_UPDATE_FREQ = 60 * 5 # 5m in seconds
 
 rp2.country('CA')
 
 wlan = None
 time_set = None
+last_update = None
 
-battery = machine.ADC(28)
-charging = Pin('WL_GPIO2', Pin.IN)
+battery_pin = machine.ADC(28)
+charging_pin = Pin('WL_GPIO2', Pin.IN)
+button_pin = Pin(16, Pin.IN, Pin.PULL_UP)
 
 debug = machine.UART(0, baudrate=9600, rx=Pin(1), tx=Pin(0))
 os.dupterm(debug)
@@ -30,10 +35,10 @@ def battery_stats():
     low = settings.BATTERY_LOW
     high = settings.BATTERY_HIGH
 
-    c = charging.value()
+    c = charging_pin.value()
 
     # Convert back to original precision, 12bit
-    reading = battery.read_u16() >> 4
+    reading = battery_pin.read_u16() >> 4
 
     return {
         'charging': c == 1,
@@ -148,10 +153,20 @@ def save_limits(limits):
     json.dump(limits, f)
     f.close()
 
-
+@util.singleton
 def tick(_: Timer):
-    print('tick: Begin')
-    global wlan
+    print(f'tick: Begin: {time.localtime()}')
+
+    global wlan, last_update
+
+    now = time.time()
+    if last_update is not None:
+        diff = now - last_update
+        if diff < MAX_UPDATE_FREQ:
+            print(f'tick: Must wait {MAX_UPDATE_FREQ}s. Last update {diff}s ago.')
+            return
+    
+    last_update = now
 
     if battery_stats()['level'] <= 0.1:
         # Skip update if power is low. Screen is sensitive.
@@ -200,7 +215,38 @@ def tick(_: Timer):
         show_error('No data')
 
 
+@rp2.asm_pio(set_init=rp2.PIO.IN_HIGH)
+def _debounce():
+    label("top")
+    wait(0, pin, 0)
+
+    # Meant to be run at 2,000Hz.
+    # 2000Hz * 30ms = 2000 * 0.03 = 60 instructions
+    set(x, 2)
+    label('waiter')
+    nop()[29]
+    jmp(x_dec, 'waiter')
+    jmp(pin, 'top')
+    irq(0)
+
+    # Wait for button to be released
+    wait(1, pin, 0)
+
+
+def button_press(_: None):
+    global ticker
+
+    print('Button press!')
+    tick(ticker)
+
+
 ticker = Timer()
+
+sm = rp2.StateMachine(0, _debounce, freq=2000,
+                      in_base=button_pin, jmp_pin=button_pin)
+sm.irq(lambda _: micropython.schedule(button_press, None))
+sm.active(1)
+
 p = 1000 * 60 * 30  # 30 minutes
 ticker.init(period=p, mode=Timer.PERIODIC, callback=tick)
 tick(ticker)
