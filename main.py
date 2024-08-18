@@ -15,7 +15,7 @@ import util
 WIFI_SSID = settings.WIFI_SSID
 WIFI_PASSWD = settings.WIFI_PASSWD
 DATA_URL = 'https://api.openweathermap.org/data/2.5/weather?q=Winnipeg,Manitoba&units=metric&appid=' + settings.APP_ID
-MAX_UPDATE_FREQ = 60 * 5 # 5m in seconds
+MAX_UPDATE_FREQ = 60 * 5  # 5m in seconds
 
 rp2.country('CA')
 
@@ -26,6 +26,7 @@ last_update = None
 battery_pin = machine.ADC(28)
 charging_pin = Pin('WL_GPIO2', Pin.IN)
 button_pin = Pin(16, Pin.IN, Pin.PULL_UP)
+power_led_pin = Pin(17, Pin.OUT)
 
 debug = machine.UART(0, baudrate=9600, rx=Pin(1), tx=Pin(0))
 os.dupterm(debug)
@@ -153,6 +154,7 @@ def save_limits(limits):
     json.dump(limits, f)
     f.close()
 
+
 @util.singleton
 def tick(_: Timer):
     print(f'tick: Begin: {time.localtime()}')
@@ -163,9 +165,10 @@ def tick(_: Timer):
     if last_update is not None:
         diff = now - last_update
         if diff < MAX_UPDATE_FREQ:
-            print(f'tick: Must wait {MAX_UPDATE_FREQ}s. Last update {diff}s ago.')
+            print(
+                f'tick: Must wait {MAX_UPDATE_FREQ}s. Last update {diff}s ago.')
             return
-    
+
     last_update = now
 
     if battery_stats()['level'] <= 0.1:
@@ -216,8 +219,8 @@ def tick(_: Timer):
 
 
 @rp2.asm_pio(set_init=rp2.PIO.IN_HIGH)
-def _debounce():
-    label("top")
+def debounce():
+    label('top')
     wait(0, pin, 0)
 
     # Meant to be run at 2,000Hz.
@@ -227,25 +230,55 @@ def _debounce():
     nop()[29]
     jmp(x_dec, 'waiter')
     jmp(pin, 'top')
-    irq(0)
+    irq(rel(0))
 
     # Wait for button to be released
     wait(1, pin, 0)
 
 
+@rp2.asm_pio(set_init=rp2.PIO.OUT_HIGH)
+def power_led():
+    pull(block)
+    set(y, osr)
+    label('counter')
+
+    # Cycles: 1 + 7 + 32 * (30 + 1) = 1000
+    set(pins, 0)
+    set(x, 31)[6]
+    label('delay_low')
+    nop()[29]
+    jmp(x_dec, 'delay_low')
+
+    # Cycles: 1 + 7 + 32 * (30 + 1) = 1000
+    set(pins, 1)
+    set(x, 31)[6]
+    label('delay_high')
+    nop()[29]
+    jmp(x_dec, 'delay_high')
+
+    # Keep flashing LED?
+    jmp(y_dec, 'counter')
+    set(pins, 1)
+
+
 def button_press(_: None):
-    global ticker
+    global ticker, power_led_sm
 
     print('Button press!')
+    power_led_sm.put(5)
     tick(ticker)
 
 
 ticker = Timer()
 
-sm = rp2.StateMachine(0, _debounce, freq=2000,
-                      in_base=button_pin, jmp_pin=button_pin)
-sm.irq(lambda _: micropython.schedule(button_press, None))
-sm.active(1)
+button_sm = rp2.StateMachine(0, debounce, freq=2000,
+                             in_base=button_pin, jmp_pin=button_pin)
+button_sm.irq(lambda _: micropython.schedule(button_press, None))
+button_sm.active(1)
+
+power_led_sm = rp2.StateMachine(1, power_led,
+                                freq=2000, set_base=power_led_pin)
+power_led_sm.active(1)
 
 p = 1000 * 60 * 30  # 30 minutes
 ticker.init(period=p, mode=Timer.PERIODIC, callback=tick)
