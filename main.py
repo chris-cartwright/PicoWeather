@@ -240,7 +240,8 @@ def debounce():
 @rp2.asm_pio(set_init=rp2.PIO.OUT_HIGH)
 def power_led():
     pull(block)
-    set(y, osr)
+    mov(y, osr)
+
     label('counter')
 
     # Cycles: 1 + 7 + 32 * (30 + 1) = 1000
@@ -259,14 +260,19 @@ def power_led():
 
     # Keep flashing LED?
     jmp(y_dec, 'counter')
-    set(pins, 1)
+
+
+def blink_power_led(count):
+    # `jmp(y_dec, 'counter')` uses value prior to decrement
+    count -= 1
+    power_led_sm.put(count)
 
 
 def button_press(_: None):
     global ticker, power_led_sm
 
     print('Button press!')
-    power_led_sm.put(5)
+    blink_power_led(5)
     tick(ticker)
 
 
