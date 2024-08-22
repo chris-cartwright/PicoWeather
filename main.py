@@ -27,6 +27,7 @@ battery_pin = machine.ADC(28)
 charging_pin = Pin('WL_GPIO2', Pin.IN)
 button_pin = Pin(16, Pin.IN, Pin.PULL_UP)
 power_led_pin = Pin(17, Pin.OUT)
+power_led_pwm = machine.PWM(Pin(18), freq=300_000, duty_u16=20_000)
 
 debug = machine.UART(0, baudrate=9600, rx=Pin(1), tx=Pin(0))
 os.dupterm(debug)
