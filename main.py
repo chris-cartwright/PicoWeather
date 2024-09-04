@@ -18,6 +18,7 @@ DATA_URL = 'https://api.openweathermap.org/data/2.5/weather?q=Winnipeg,Manitoba&
 MAX_UPDATE_FREQ = 60 * 5  # 5m in seconds
 
 rp2.country('CA')
+ntptime.host = settings.NTP_HOST
 
 wlan = None
 time_set = None
