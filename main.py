@@ -271,6 +271,11 @@ def power_led():
 def blink_power_led(count):
     # `jmp(y_dec, 'counter')` uses value prior to decrement
     count -= 1
+
+    # Check if LED is already blinking
+    if power_led_sm.tx_fifo() > 0:
+        return
+    
     power_led_sm.put(count)
 
 
