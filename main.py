@@ -122,8 +122,13 @@ def save_weather(weather):
 
 
 def update_weather():
-    response = requests.get(DATA_URL)
-    if response.status_code is not 200:
+    try:
+        response = requests.get(DATA_URL)
+        if response.status_code is not 200:
+            return None
+    except Exception as e:
+        print('update_weather: Failed to acquire weather data')
+        print(e)
         return None
 
     return json.loads(response.text)
