@@ -1,6 +1,7 @@
 import eink
 import time
 import gc
+import settings
 from writer import Writer
 from fonts import arial10, arial35, arial50
 
@@ -139,7 +140,8 @@ def update_display(weather, limits, battery_stats):
 
     # Last update time, voltage; pinned at bottom
     line = black_proxy.height - 10
-    (year, month, day, hour, minute, second, *_)  = time.localtime()
+    local = time.time() + settings.TZ_OFFSET
+    (year, month, day, hour, minute, second, *_)  = time.localtime(local)
     s = f"{year}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}"
     Writer.set_textpos(black_proxy, line, 0)
     w10black.printstring(s)
