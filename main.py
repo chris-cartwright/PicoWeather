@@ -14,18 +14,19 @@ import util
 
 WIFI_SSID = settings.WIFI_SSID
 WIFI_PASSWD = settings.WIFI_PASSWD
-DATA_URL = 'https://api.openweathermap.org/data/2.5/weather?q=Winnipeg,Manitoba&units=metric&appid=' + settings.APP_ID
+WEATHER_URL = "https://automate-this.internal.chris-cartwright.com/v1/weather"
+LOCALE_URL = "https://automate-this.internal.chris-cartwright.com/v1/locale_info"
 MAX_UPDATE_FREQ = 60 * 5  # 5m in seconds
 
-rp2.country('CA')
-ntptime.host = settings.NTP_HOST
+rp2.country("CA")
+ntptime.host = settings.NTP_HOST  # Need a localtime NTP host
 
 wlan = None
 time_set = None
 last_update = None
 
 battery_pin = machine.ADC(28)
-charging_pin = Pin('WL_GPIO2', Pin.IN)
+charging_pin = Pin("WL_GPIO2", Pin.IN)
 button_pin = Pin(16, Pin.IN, Pin.PULL_UP)
 power_led_pin = Pin(17, Pin.OUT)
 power_led_pwm = machine.PWM(Pin(18), freq=300_000, duty_u16=20_000)
@@ -44,11 +45,11 @@ def battery_stats():
     reading = battery_pin.read_u16() >> 4
 
     return {
-        'charging': c == 1,
-        'reading': reading,
-        'low': low,
-        'high': high,
-        'level': (reading - low) / (high - low)
+        "charging": c == 1,
+        "reading": reading,
+        "low": low,
+        "high": high,
+        "level": (reading - low) / (high - low),
     }
 
 
@@ -63,7 +64,23 @@ def set_time():
     if wlan is not None and wlan.isconnected():
         ntptime.settime()
         time_set = time.time()
-        print(f'set_time: NTP time set: {time.localtime()}')
+        print(f"set_time: NTP time set: {time.gmtime()}")
+
+        try:
+            response = requests.get(LOCALE_URL, headers={"x-unix-timestamps": "true"})
+            if response.status_code != 200:
+                return
+        except Exception as e:
+            print("set_time: Failed to acquire locale data")
+            print(e)
+            return
+
+        try:
+            locale_info = json.loads(response.text)
+            util.tz_offset = locale_info["timeZoneOffset"]
+        except Exception as e:
+            print("set_time: Failed to adjust for timezone")
+            print(e)
 
 
 def connect():
@@ -78,7 +95,7 @@ def connect():
         return
 
     wlan.active(True)
-    wlan.config(pm=0xa11140)
+    wlan.config(pm=0xA11140)
     wlan.connect(WIFI_SSID, WIFI_PASSWD)
 
     while not wlan.isconnected() and wlan.status() >= 0:
@@ -93,11 +110,10 @@ def connect():
 
 def load_weather():
     try:
-        f = open('weather.json', 'r')
-        old = json.load(f)
-        f.close()
+        with open("weather.json", "r") as f:
+            old = json.load(f)
 
-        old_time = old['dt']
+        old_time = old["timestamp"]
 
         set_time()
         now = time.time()
@@ -117,18 +133,18 @@ def load_weather():
 
 
 def save_weather(weather):
-    f = open('weather.json', 'w')
-    json.dump(weather, f)
-    f.close()
+    with open("weather.json", "w") as f:
+        json.dump(weather, f)
+        f.flush()
 
 
 def update_weather():
     try:
-        response = requests.get(DATA_URL)
-        if response.status_code is not 200:
+        response = requests.get(WEATHER_URL, headers={"x-unix-timestamps": "true"})
+        if response.status_code != 200:
             return None
     except Exception as e:
-        print('update_weather: Failed to acquire weather data')
+        print("update_weather: Failed to acquire weather data")
         print(e)
         return None
 
@@ -137,9 +153,8 @@ def update_weather():
 
 def load_limits():
     try:
-        f = open('limits.json', 'r')
-        data = json.load(f)
-        f.close()
+        with open("limits.json", "r") as f:
+            data = json.load(f)
 
         return data
 
@@ -149,22 +164,22 @@ def load_limits():
         pass
 
     return {
-        'temp': {'low': -15, 'high': 25},
-        'humidity': {'low': -1, 'high': 80},
-        'wind': {'low': -1, 'high': 10},
-        'gusts': {'low': -1, 'high': 20}
+        "temp": {"low": -15, "high": 25},
+        "humidity": {"low": -1, "high": 80},
+        "wind": {"low": -1, "high": 10},
+        "gusts": {"low": -1, "high": 20},
     }
 
 
 def save_limits(limits):
-    f = open('limits.json', 'w')
-    json.dump(limits, f)
-    f.close()
+    with open("limits.json", "w") as f:
+        json.dump(limits, f)
+        f.flush()
 
 
 @util.singleton
 def tick(_: Timer):
-    print(f'tick: Begin: {time.localtime()}')
+    print(f"tick: Begin: {time.localtime()}")
 
     global wlan, last_update
 
@@ -172,18 +187,17 @@ def tick(_: Timer):
     if last_update is not None:
         diff = now - last_update
         if diff < MAX_UPDATE_FREQ:
-            print(
-                f'tick: Must wait {MAX_UPDATE_FREQ}s. Last update {diff}s ago.')
+            print(f"tick: Must wait {MAX_UPDATE_FREQ}s. Last update {diff}s ago.")
             return
 
     last_update = now
 
-    if battery_stats()['level'] <= 0.1:
+    if battery_stats()["level"] <= 0.1:
         # Skip update if power is low. Screen is sensitive.
-        print('tick: Low power; skip screen refresh.')
+        print("tick: Low power; skip screen refresh.")
         return
 
-    print('tick: Battery OK')
+    print("tick: Battery OK")
     if wlan is None or not wlan.isconnected():
         # WLAN is unstable for some reason. Keep trying.
         counter = 0
@@ -194,19 +208,19 @@ def tick(_: Timer):
                     break
 
                 if wlan is not None:
-                    print('tick: Connect failed, disconnect.')
+                    print("tick: Connect failed, disconnect.")
                     wlan.disconnect()
 
             except OSError as e:
                 if wlan is not None:
-                    print('tick: Error, disconnect.')
+                    print("tick: Error, disconnect.")
                     print(e)
                     wlan.disconnect()
 
             counter += 1
 
     if wlan is None or not wlan.isconnected():
-        print('tick: Error, no network.')
+        print("tick: Error, no network.")
         return
 
     weather = load_weather()
@@ -217,26 +231,26 @@ def tick(_: Timer):
             save_weather(weather)
 
     if weather is not None:
-        print('tick: Update screen')
+        print("tick: Update screen")
         limits = load_limits()
         update_display(weather, limits, battery_stats())
     else:
-        print('tick: No data')
-        show_error('No data')
+        print("tick: No data")
+        show_error("No data")
 
 
 @rp2.asm_pio(set_init=rp2.PIO.IN_HIGH)
 def debounce():
-    label('top')
+    label("top")
     wait(0, pin, 0)
 
     # Meant to be run at 2,000Hz.
     # 2000Hz * 30ms = 2000 * 0.03 = 60 instructions
     set(x, 2)
-    label('waiter')
+    label("waiter")
     nop()[29]
-    jmp(x_dec, 'waiter')
-    jmp(pin, 'top')
+    jmp(x_dec, "waiter")
+    jmp(pin, "top")
     irq(rel(0))
 
     # Wait for button to be released
@@ -248,24 +262,24 @@ def power_led():
     pull(block)
     mov(y, osr)
 
-    label('counter')
+    label("counter")
 
     # Cycles: 1 + 7 + 32 * (30 + 1) = 1000
     set(pins, 0)
     set(x, 31)[6]
-    label('delay_low')
+    label("delay_low")
     nop()[29]
-    jmp(x_dec, 'delay_low')
+    jmp(x_dec, "delay_low")
 
     # Cycles: 1 + 7 + 32 * (30 + 1) = 1000
     set(pins, 1)
     set(x, 31)[6]
-    label('delay_high')
+    label("delay_high")
     nop()[29]
-    jmp(x_dec, 'delay_high')
+    jmp(x_dec, "delay_high")
 
     # Keep flashing LED?
-    jmp(y_dec, 'counter')
+    jmp(y_dec, "counter")
 
 
 def blink_power_led(count):
@@ -275,27 +289,27 @@ def blink_power_led(count):
     # Check if LED is already blinking
     if power_led_sm.tx_fifo() > 0:
         return
-    
+
     power_led_sm.put(count)
 
 
 def button_press(_: None):
     global ticker, power_led_sm
 
-    print('Button press!')
+    print("Button press!")
     blink_power_led(5)
     tick(ticker)
 
 
 ticker = Timer()
 
-button_sm = rp2.StateMachine(0, debounce, freq=2000,
-                             in_base=button_pin, jmp_pin=button_pin)
+button_sm = rp2.StateMachine(
+    0, debounce, freq=2000, in_base=button_pin, jmp_pin=button_pin
+)
 button_sm.irq(lambda _: micropython.schedule(button_press, None))
 button_sm.active(1)
 
-power_led_sm = rp2.StateMachine(1, power_led,
-                                freq=2000, set_base=power_led_pin)
+power_led_sm = rp2.StateMachine(1, power_led, freq=2000, set_base=power_led_pin)
 power_led_sm.active(1)
 
 p = 1000 * 60 * 30  # 30 minutes

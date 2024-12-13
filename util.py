@@ -1,4 +1,7 @@
 import os
+import time
+
+tz_offset: int | None = None
 
 def empty_dir(dir):
     for (name, type, *_) in os.ilistdir(dir):
@@ -24,3 +27,9 @@ def singleton(f):
         running = False
     
     return call
+
+def localtime(t: int | float):
+    global tz_offset
+
+    t = t + (tz_offset or 0)
+    return time.localtime(t)
