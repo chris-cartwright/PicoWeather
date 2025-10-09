@@ -62,9 +62,17 @@ def set_time():
         return
 
     if wlan is not None and wlan.isconnected():
+        old_time = time.time()
         ntptime.settime()
         time_set = time.time()
-        print(f"set_time: NTP time set: {time.gmtime()}")
+
+        # Logs showed the time jumped from year 2025 to 2036 for some reason.
+        max_change = 6 * 60 * 60 # 6 hours
+        if time_set - old_time > max_change:
+            machine.RTC().datetime(time.gmtime(old_time))
+            print(f"set_time: NTP time too far out of range. Old: {old_time}  NTP: {time_set}. Reset to old time.")
+        else:
+            print(f"set_time: NTP time set: {time.gmtime()}")
 
         try:
             response = requests.get(LOCALE_URL, headers={"x-unix-timestamps": "true"})
