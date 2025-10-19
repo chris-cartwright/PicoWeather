@@ -187,7 +187,7 @@ def update_display(weather, limits, battery_stats):
     right_string(writer, s, line + 15)
     writer.printstring(s)
 
-    line += 55
+    line += 60
 
     # Humidity
     val = weather["humidity"]
@@ -195,7 +195,7 @@ def update_display(weather, limits, battery_stats):
     s = f"{val}%"
     center_string(writer, s, line)
     writer.printstring(s)
-    line += 40
+    line += 35
 
     # High and Low
     s = str(round(weather["temperature"]["max"]))
@@ -229,43 +229,40 @@ def update_display(weather, limits, battery_stats):
         writer.printstring(s)
 
     s = "gust >"
-    center_string(w10black, s, line)
+    center_string(w10black, s, line + 2)
     w10black.printstring(s)
     s = degrees_to_compass(weather["wind"]["degrees"])
-    center_string(w10black, s, line + 15)
+    center_string(w10black, s, line + 17)
     w10black.printstring(s)
     line += 40
 
     # Sunrise and sunset
-    (_, _, _, hour, *_) = util.localtime(time.time())
-    s = ""
-    if hour < 12:
-        (_, _, _, hour, minute, *_) = util.localtime(weather["sunrise"])
-        s = f"Sunrise: {hour}:{minute}"
-    else:
-        (_, _, _, hour, minute, *_) = util.localtime(weather["sunset"])
-        s = f"Sunset: {hour}:{minute}"
-
+    (_, _, _, hour, minute, *_) = util.localtime(weather["sunrise"])
+    s = f"Sunrise: {hour}:{minute}"
     center_string(w10black, s, line, dw=black_proxy.width / 2)
+    w10black.printstring(s)
+
+    (_, _, _, hour, minute, *_) = util.localtime(weather["sunset"])
+    s = f"Sunset: {hour}:{minute}"
+    center_string(w10black, s, line + 12, dw=black_proxy.width / 2)
     w10black.printstring(s)
 
     # Pressure
     s = f"{weather['pressure']} hPa"
     center_string(w10black, s, line, dw=black_proxy.width / 2, o=black_proxy.width / 2)
     w10black.printstring(s)
-    line += 15
+    line += 30
 
     # Overcast?
     s = ", ".join([entry["description"] for entry in weather["conditions"]])
-    # Use up a little extra space at the bottom
-    DebugWriter.set_textpos(black_proxy, line + 10, 0)
+    DebugWriter.set_textpos(black_proxy, line, 0)
     w35black.printstring(s)
 
     # Last update time, voltage; pinned at bottom
     line = black_proxy.height - 10
     (year, month, day, hour, minute, second, *_) = util.localtime(weather["timestamp"])
     s = f"{year}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}"
-    DebugWriter.set_textpos(black_proxy, line, 0)
+    center_string(w10black, s, line)
     w10black.printstring(s)
 
     if not battery_stats["charging"]:
