@@ -309,17 +309,24 @@ def button_press(_: None):
     tick(ticker)
 
 
-ticker = Timer()
+def main():
+    global ticker, button_sm, power_led_sm
 
-button_sm = rp2.StateMachine(
-    0, debounce, freq=2000, in_base=button_pin, jmp_pin=button_pin
-)
-button_sm.irq(lambda _: micropython.schedule(button_press, None))
-button_sm.active(1)
+    ticker = Timer()
 
-power_led_sm = rp2.StateMachine(1, power_led, freq=2000, set_base=power_led_pin)
-power_led_sm.active(1)
+    button_sm = rp2.StateMachine(
+        0, debounce, freq=2000, in_base=button_pin, jmp_pin=button_pin
+    )
+    button_sm.irq(lambda _: micropython.schedule(button_press, None))
+    button_sm.active(1)
 
-p = 1000 * 60 * 30  # 30 minutes
-ticker.init(period=p, mode=Timer.PERIODIC, callback=tick)
-tick(ticker)
+    power_led_sm = rp2.StateMachine(1, power_led, freq=2000, set_base=power_led_pin)
+    power_led_sm.active(1)
+
+    p = 1000 * 60 * 30  # 30 minutes
+    ticker.init(period=p, mode=Timer.PERIODIC, callback=tick)
+    tick(ticker)
+
+
+if __name__ == "__main__":
+    main()
