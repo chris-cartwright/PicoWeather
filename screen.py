@@ -5,6 +5,37 @@ import util
 from writer import Writer
 from fonts import arial10, arial35, arial50
 
+debug = True
+
+
+class DebugWriter(Writer):
+    @staticmethod
+    def set_textpos(device, row=None, col=None):
+        global debug
+
+        if debug:
+            print("set_textpos", (device, row, col))
+
+        Writer.set_textpos(device, row, col)
+
+    @staticmethod
+    def get_textpos(device):
+        return Writer.get_textpos(device)
+
+    def __init__(self, *args, **kwargs):
+        self.writer = Writer(*args, **kwargs)
+
+    def __getattr__(self, attr):
+        return getattr(self.writer, attr)
+
+    def printstring(self, string, invert=True):
+        global debug
+
+        if debug:
+            print("printstring: ", (string, invert))
+
+        self.writer.printstring(string, invert)
+
 
 class ProxyDevice:
     def __init__(self, device):
@@ -46,26 +77,70 @@ def degrees_to_compass(deg):
     return sectors[int(round((deg % 360) / 22.5, 0))]
 
 
-def center_string(font, s, x, dw=None):
+def center_string(font, s, x, dw=None, o=None):
     if dw is None:
         dw = font.device.width
 
     dw = int(dw)
     w = font.stringlen(s)
     c = (dw / 2) - (w / 2)
+    c += o or 0
     c = int(round(c, 0))
-    Writer.set_textpos(font.device, x, c)
+    DebugWriter.set_textpos(font.device, x, c)
+    return (w, c)
 
 
-def right_string(font, s, x, dw=None):
+def right_string(font, s, x, dw=None, o=None):
     if dw is None:
         dw = font.device.width
 
     dw = int(dw)
     w = font.stringlen(s)
-    l = dw - w
-    l = int(round(l, 0))
-    Writer.set_textpos(font.device, x, l)
+    r = dw - w
+    r += o or 0
+    r = int(round(r, 0))
+    DebugWriter.set_textpos(font.device, x, r)
+    return (w, r)
+
+
+# Totaly arbitrary values to put something on the screen.
+# Some values are set to multiples of "8" to aid in positioning.
+def debug_update_display(gusts=88.88):
+    weather = {
+        "pressure": 1015,
+        "snow": None,
+        "sunrise": 1760013668,
+        "sunset": 1760053805,
+        "cloudCoverage": 0,
+        "conditions": [{"main": "Clouds", "description": "few clouds"}],
+        "temperature": {
+            "current": -88.88,
+            "max": -88.88,
+            "min": -88.88,
+            "feelsLike": -88.88,
+        },
+        "humidity": 55,
+        "wind": {"degrees": 300, "speed": 88.88, "gusts": gusts},
+        "rain": None,
+        "visibility": 10000,
+        "timestamp": 1760047371,
+    }
+    limits = {
+        "temp": {"low": -15, "high": 25},
+        "humidity": {"low": -1, "high": 80},
+        "wind": {"low": -1, "high": 10},
+        "gusts": {"low": -1, "high": 20},
+    }
+
+    battery_stats = {
+        "charging": True,
+        "high": 2180,
+        "level": 1.892308,
+        "reading": 2644,
+        "low": 1660,
+    }
+
+    update_display(weather, limits, battery_stats)
 
 
 def update_display(weather, limits, battery_stats):
@@ -86,21 +161,32 @@ def update_display(weather, limits, battery_stats):
     epd.imageblack.fill(0xFF)
     epd.imagered.fill(0xFF)
 
-    w50black = Writer(black_proxy, arial50)
-    w50red = Writer(red_proxy, arial50)
-    w35black = Writer(black_proxy, arial35)
-    w35red = Writer(red_proxy, arial35)
-    w10black = Writer(black_proxy, arial10)
-    w10red = Writer(red_proxy, arial10)
+    w50black: Writer = DebugWriter(black_proxy, arial50)
+    w50red: Writer = DebugWriter(red_proxy, arial50)
+    w35black: Writer = DebugWriter(black_proxy, arial35)
+    w35red: Writer = DebugWriter(red_proxy, arial35)
+    w10black: Writer = DebugWriter(black_proxy, arial10)
+    w10red: Writer = DebugWriter(red_proxy, arial10)
 
     line = 10
 
-    # Current temperature
+    # Current temperature and Feels like
     val = round(weather["temperature"]["current"])
     writer = w50black if within_limits("temp", val) else w50red
     s = str(val)
-    center_string(writer, s, line)
+    DebugWriter.set_textpos(writer.device, line, 3)
     writer.printstring(s)
+
+    s = "Feels like"
+    right_string(w10black, s, line)
+    w10black.printstring(s)
+
+    val = round(weather["temperature"]["feelsLike"])
+    writer = w35black if within_limits("temp", val) else w35red
+    s = str(val)
+    right_string(writer, s, line + 15)
+    writer.printstring(s)
+
     line += 55
 
     # Humidity
@@ -111,35 +197,43 @@ def update_display(weather, limits, battery_stats):
     writer.printstring(s)
     line += 40
 
-    # Feels like
-    s = "Feels like"
-    right_string(w10black, s, line + 10, black_proxy.width / 2 - 10)
+    # High and Low
+    s = str(round(weather["temperature"]["max"]))
+    (w, l) = center_string(w35black, s, line, dw=black_proxy.width * 0.4)
+    w35black.printstring(s)
+    s = "Hi"
+    DebugWriter.set_textpos(black_proxy, line + 5, l + w + 3)
     w10black.printstring(s)
-    Writer.set_textpos(black_proxy, line, round(black_proxy.width / 2))
-    w35black.printstring(str(round(weather["temperature"]["feelsLike"])))
+    s = str(round(weather["temperature"]["min"]))
+    (w, l) = center_string(
+        w35black, s, line, dw=black_proxy.width * 0.4, o=black_proxy.width * 0.6
+    )
+    w35black.printstring(s)
+    s = "Lo"
+    right_string(w10black, s, line + 15, dw=l, o=-3)
+    w10black.printstring(s)
     line += 40
 
     # Wind speed + direction
-    colw = black_proxy.width
-    subcolw = round(colw / 2)
-    if "gusts" in weather["wind"]:
-        colw = round(black_proxy.width * 0.6)
-        subcolw = round(colw * 0.66)
-        val = round(weather["wind"]["gusts"])
-        writer = w35black if within_limits("gusts", val) else w35red
-        s = f"{val}"
-        Writer.set_textpos(writer.device, line, colw)
-        writer.printstring(s)
-
     val = round(weather["wind"]["speed"])
     writer = w35black if within_limits("wind", val) else w35red
-    s = str(val)
-    right_string(writer, s, line, dw=subcolw)
+    s = str(round(weather["wind"]["speed"]))
+    center_string(writer, s, line, dw=black_proxy.width / 3)
     writer.printstring(s)
-    Writer.set_textpos(black_proxy, line, subcolw + 5)
-    w10black.printstring("km/h")
-    Writer.set_textpos(black_proxy, line + 15, subcolw + 5)
-    w10black.printstring(degrees_to_compass(weather["wind"]["degrees"]))
+
+    if "gusts" in weather["wind"]:
+        val = round(weather["wind"]["gusts"])
+        writer = w35black if within_limits("gusts", val) else w35red
+        s = str(val)
+        center_string(writer, s, line, dw=black_proxy.width / 3, o=black_proxy.width * 0.66)
+        writer.printstring(s)
+
+    s = "gust >"
+    center_string(w10black, s, line)
+    w10black.printstring(s)
+    s = degrees_to_compass(weather["wind"]["degrees"])
+    center_string(w10black, s, line + 15)
+    w10black.printstring(s)
     line += 40
 
     # Sunrise and sunset
@@ -151,27 +245,27 @@ def update_display(weather, limits, battery_stats):
     else:
         (_, _, _, hour, minute, *_) = util.localtime(weather["sunset"])
         s = f"Sunset: {hour}:{minute}"
-    
-    Writer.set_textpos(black_proxy, line, 0)
+
+    center_string(w10black, s, line, dw=black_proxy.width / 2)
     w10black.printstring(s)
 
     # Pressure
-    s = f"P: {weather['pressure']} hPa"
-    right_string(w10black, s, line)
+    s = f"{weather['pressure']} hPa"
+    center_string(w10black, s, line, dw=black_proxy.width / 2, o=black_proxy.width / 2)
     w10black.printstring(s)
     line += 15
 
     # Overcast?
     s = ", ".join([entry["description"] for entry in weather["conditions"]])
     # Use up a little extra space at the bottom
-    Writer.set_textpos(black_proxy, line + 10, 0)
+    DebugWriter.set_textpos(black_proxy, line + 10, 0)
     w35black.printstring(s)
 
     # Last update time, voltage; pinned at bottom
     line = black_proxy.height - 10
     (year, month, day, hour, minute, second, *_) = util.localtime(weather["timestamp"])
     s = f"{year}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}"
-    Writer.set_textpos(black_proxy, line, 0)
+    DebugWriter.set_textpos(black_proxy, line, 0)
     w10black.printstring(s)
 
     if not battery_stats["charging"]:
