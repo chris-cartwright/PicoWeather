@@ -5,15 +5,18 @@ import util
 from writer import Writer
 from fonts import arial10, arial35, arial50
 
-debug = True
+_debug = False
+
+def debug(enabled: bool):
+    _debug = enabled
 
 
 class DebugWriter(Writer):
     @staticmethod
     def set_textpos(device, row=None, col=None):
-        global debug
+        global _debug
 
-        if debug:
+        if _debug:
             print("set_textpos", (device, row, col))
 
         Writer.set_textpos(device, row, col)
@@ -29,9 +32,9 @@ class DebugWriter(Writer):
         return getattr(self.writer, attr)
 
     def printstring(self, string, invert=True):
-        global debug
+        global _debug
 
-        if debug:
+        if _debug:
             print("printstring: ", (string, invert))
 
         self.writer.printstring(string, invert)

@@ -8,9 +8,12 @@ import settings
 import machine
 import os
 from machine import Timer, Pin
+import screen
 from screen import show_error, update_display
 import micropython
 import util
+
+_debug = False
 
 WIFI_SSID = settings.WIFI_SSID
 WIFI_PASSWD = settings.WIFI_PASSWD
@@ -311,7 +314,16 @@ def button_press(_: None):
     tick(ticker)
 
 
-def main():
+def feed(*_):
+    global _debug
+
+    if _debug:
+        print("Feeding time!")
+
+    wdt()
+
+
+def main(wdt):
     global ticker, button_sm, power_led_sm
 
     ticker = Timer()
@@ -329,8 +341,22 @@ def main():
     ticker.init(period=p, mode=Timer.PERIODIC, callback=tick)
     tick(ticker)
 
+    wdt_timer = Timer()
+    p = 1000 * 15  # 15 seconds
+
+    wdt_timer.init(period=p, mode=Timer.PERIODIC, callback=feed)
+
     set_time(True)
 
 
 if __name__ == "__main__":
-    main()
+    # Initialize here before touching main program to ensure setup.
+    import watchdog
+
+    watchdog.debug(_debug)
+
+    wdt = watchdog.WatchdogTimer(120)
+    print("Watchdog set.")
+
+    screen.debug(_debug)
+    main(wdt)
