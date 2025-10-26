@@ -53,7 +53,7 @@ def battery_stats():
     }
 
 
-def set_time():
+def set_time(init=False):
     global time_set
     global wlan
 
@@ -67,10 +67,12 @@ def set_time():
         time_set = time.time()
 
         # Logs showed the time jumped from year 2025 to 2036 for some reason.
-        max_change = 6 * 60 * 60 # 6 hours
-        if time_set - old_time > max_change:
+        max_change = 6 * 60 * 60  # 6 hours
+        if (time_set - old_time > max_change) and not init:
             machine.RTC().datetime(time.gmtime(old_time))
-            print(f"set_time: NTP time too far out of range. Old: {old_time}  NTP: {time_set}. Reset to old time.")
+            print(
+                f"set_time: NTP time too far out of range. Old: {old_time}  NTP: {time_set}. Reset to old time."
+            )
         else:
             print(f"set_time: NTP time set: {time.gmtime()}")
 
@@ -326,6 +328,8 @@ def main():
     p = 1000 * 60 * 30  # 30 minutes
     ticker.init(period=p, mode=Timer.PERIODIC, callback=tick)
     tick(ticker)
+
+    set_time(True)
 
 
 if __name__ == "__main__":
