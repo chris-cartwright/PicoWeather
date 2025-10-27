@@ -9,9 +9,9 @@ import machine
 import os
 from machine import Timer, Pin
 import screen
-from screen import show_error, update_display
 import micropython
 import util
+import mqtt
 
 _debug_mode = True
 
@@ -27,6 +27,8 @@ ntptime.host = settings.NTP_HOST  # Need a localtime NTP host
 wlan = None
 time_set = None
 last_update = None
+ticker = None
+weather = None
 
 battery_pin = machine.ADC(28)
 charging_pin = Pin("WL_GPIO2", Pin.IN)
@@ -56,7 +58,7 @@ def battery_stats():
     }
 
 
-def set_time(init=False):
+def set_time(force=False):
     global time_set
     global wlan
 
@@ -71,7 +73,7 @@ def set_time(init=False):
 
         # Logs showed the time jumped from year 2025 to 2036 for some reason.
         max_change = 6 * 60 * 60  # 6 hours
-        if (time_set - old_time > max_change) and not init:
+        if not force and (time_set - old_time > max_change):
             machine.RTC().datetime(time.gmtime(old_time))
             if _debug_mode:
                 print(
@@ -155,10 +157,12 @@ def save_weather(weather):
         f.flush()
 
 
-def update_weather():
+def get_weather():
     try:
         response = requests.get(WEATHER_URL, headers={"x-unix-timestamps": "true"})
         if response.status_code != 200:
+            print(f"Invalid status code: {response.status_code}")
+            print(response)
             return None
     except Exception as e:
         print("update_weather: Failed to acquire weather data")
@@ -166,6 +170,12 @@ def update_weather():
         return None
 
     return json.loads(response.text)
+
+
+def refresh_weather():
+    weather = get_weather()
+    if weather is not None:
+        save_weather(weather)
 
 
 def load_limits():
@@ -243,17 +253,15 @@ def tick(_: Timer):
     weather = load_weather()
 
     if weather is None:
-        weather = update_weather()
-        if weather is not None:
-            save_weather(weather)
+        refresh_weather()
 
     if weather is not None:
         print("tick: Update screen")
         limits = load_limits()
-        update_display(weather, limits, battery_stats())
+        screen.update_display(weather, limits, battery_stats())
     else:
         print("tick: No data")
-        show_error("No data")
+        screen.show_error("No data")
 
 
 @rp2.asm_pio(set_init=rp2.PIO.IN_HIGH)
@@ -316,20 +324,18 @@ def button_press(_: None):
 
     blink_power_led(5)
     update()
+
+
+def update():
+    global ticker
+
     tick(ticker)
-
-
-def feed(*_):
-    global _debug
-
-    if _debug:
-        print("Feeding time!")
-
-    wdt()
 
 
 def main(wdt):
     global ticker, button_sm, power_led_sm
+
+    set_time(True)
 
     ticker = Timer()
 
@@ -344,14 +350,17 @@ def main(wdt):
 
     p = 1000 * 60 * 30  # 30 minutes
     ticker.init(period=p, mode=Timer.PERIODIC, callback=tick)
-    tick(ticker)
+    update()
 
-    wdt_timer = Timer()
-    p = 1000 * 15  # 15 seconds
+    mqtt.start()
 
-    wdt_timer.init(period=p, mode=Timer.PERIODIC, callback=feed)
-
-    set_time(True)
+    try:
+        while True:
+            mqtt.pump()
+            wdt()
+            time.sleep(1)
+    finally:
+        mqtt.stop()
 
 
 if __name__ == "__main__":

@@ -4,6 +4,8 @@ import gc
 import util
 from writer import Writer
 from fonts import arial10, arial35, arial50
+import mqtt
+
 _debug_mode = False
 
 
@@ -230,7 +232,9 @@ def update_display(weather, limits, battery_stats):
         val = round(weather["wind"]["gusts"])
         writer = w35black if within_limits("gusts", val) else w35red
         s = str(val)
-        center_string(writer, s, line, dw=black_proxy.width / 3, o=black_proxy.width * 0.66)
+        center_string(
+            writer, s, line, dw=black_proxy.width / 3, o=black_proxy.width * 0.66
+        )
         writer.printstring(s)
 
     s = "gust >"
@@ -281,6 +285,7 @@ def update_display(weather, limits, battery_stats):
     epd.display()
     epd.sleep()
 
+    mqtt.publish(mqtt.TOPIC_UPDATED, str(weather))
     gc.collect()
 
 
