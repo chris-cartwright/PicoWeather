@@ -13,7 +13,7 @@ from screen import show_error, update_display
 import micropython
 import util
 
-_debug = False
+_debug_mode = True
 
 WIFI_SSID = settings.WIFI_SSID
 WIFI_PASSWD = settings.WIFI_PASSWD
@@ -73,10 +73,11 @@ def set_time(init=False):
         max_change = 6 * 60 * 60  # 6 hours
         if (time_set - old_time > max_change) and not init:
             machine.RTC().datetime(time.gmtime(old_time))
-            print(
-                f"set_time: NTP time too far out of range. Old: {old_time}  NTP: {time_set}. Reset to old time."
-            )
-        else:
+            if _debug_mode:
+                print(
+                    f"set_time: NTP time too far out of range. Old: {old_time}  NTP: {time_set}. Reset to old time."
+                )
+        elif _debug_mode:
             print(f"set_time: NTP time set: {time.gmtime()}")
 
         try:
@@ -94,6 +95,9 @@ def set_time(init=False):
         except Exception as e:
             print("set_time: Failed to adjust for timezone")
             print(e)
+    else:
+        if _debug_mode:
+            print("set_time: WiFi disconnected. Time not updated.")
 
 
 def connect():
@@ -307,10 +311,11 @@ def blink_power_led(count):
 
 
 def button_press(_: None):
-    global ticker, power_led_sm
+    if _debug_mode:
+        print("Button press!")
 
-    print("Button press!")
     blink_power_led(5)
+    update()
     tick(ticker)
 
 
@@ -350,13 +355,15 @@ def main(wdt):
 
 
 if __name__ == "__main__":
+    print("Running main program...")
+    print("Debug: ", _debug_mode)
     # Initialize here before touching main program to ensure setup.
     import watchdog
 
-    watchdog.debug(_debug)
+    watchdog.debug_mode(_debug_mode)
 
     wdt = watchdog.WatchdogTimer(120)
     print("Watchdog set.")
 
-    screen.debug(_debug)
+    screen.debug_mode(_debug_mode)
     main(wdt)

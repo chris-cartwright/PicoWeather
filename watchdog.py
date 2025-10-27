@@ -2,10 +2,13 @@ from machine import WDT, Timer
 from micropython import schedule
 from time import ticks_ms, ticks_diff
 
-_debug = False
+_debug_mode = False
 
-def debug(enabled: bool):
-    _debug = enabled
+
+def debug_mode(enabled: bool):
+    global _debug_mode
+
+    _debug_mode = enabled
 
 
 class WatchdogTimer:
@@ -46,13 +49,10 @@ class _FakeWDT:
         self._timeout = timeout
         self._last = ticks_ms()
 
-    def feed(self):
-        schedule(self._feed, None)
-
-    def _feed(self, _):
-        global _debug
+    def feed(self, _):
+        global _debug_mode
 
         elapsed = ticks_diff(ticks_ms(), self._last)
         self._last = ticks_ms()
-        if _debug:
+        if _debug_mode:
             print(f"I have been fed. Elapsed: {elapsed}")

@@ -4,19 +4,21 @@ import gc
 import util
 from writer import Writer
 from fonts import arial10, arial35, arial50
+_debug_mode = False
 
-_debug = False
 
-def debug(enabled: bool):
-    _debug = enabled
+def debug_mode(enabled: bool):
+    global _debug_mode
+
+    _debug_mode = enabled
 
 
 class DebugWriter(Writer):
     @staticmethod
     def set_textpos(device, row=None, col=None):
-        global _debug
+        global _debug_mode
 
-        if _debug:
+        if _debug_mode:
             print("set_textpos", (device, row, col))
 
         Writer.set_textpos(device, row, col)
@@ -32,9 +34,9 @@ class DebugWriter(Writer):
         return getattr(self.writer, attr)
 
     def printstring(self, string, invert=True):
-        global _debug
+        global _debug_mode
 
-        if _debug:
+        if _debug_mode:
             print("printstring: ", (string, invert))
 
         self.writer.printstring(string, invert)
