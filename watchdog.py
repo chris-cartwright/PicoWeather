@@ -19,7 +19,7 @@ class WatchdogTimer:
 
     def __init__(self, timeout: int):
         self._timeout = timeout
-        self._wdt = _FakeWDT()  # WDT(timeout=3000)
+        self._wdt = WDT(timeout=3000)
 
         self.feed()
         self._timer = Timer(period=1000, mode=Timer.PERIODIC, callback=self._validate)
@@ -30,18 +30,14 @@ class WatchdogTimer:
     def feed(self):
         self._counter = self._timeout
 
-    def _print(self, _):
-        global _debug
-
-        if _debug:
-            print(f"[INTR] Counter: {self._counter}")
-
     def _validate(self, _):
-        schedule(self._print, None)
         self._counter -= 1
 
         if self._counter > 0:
             self._wdt.feed()
+
+        if _debug_mode:
+            print(f"[INTR] Counter: {self._counter}")
 
 
 class _FakeWDT:
