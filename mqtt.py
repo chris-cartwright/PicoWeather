@@ -12,6 +12,7 @@ def debug_mode(enabled):
     _debug_mode = enabled
 
 
+TOPIC_HELLO_WHOS_THERE = "hello/whos-there"
 TOPIC_BASE = f"devices/{settings.MQTT_CLIENT_ID}"
 TOPIC_PING = f"{TOPIC_BASE}/ping"
 TOPIC_PONG = f"{TOPIC_BASE}/pong"
@@ -31,7 +32,7 @@ def _subscribe():
         print("Subscribe: ", topic)
         _client.subscribe(topic)
 
-    sub("hello/whos-there")
+    sub(TOPIC_HELLO_WHOS_THERE)
     sub(TOPIC_PING)
     sub(TOPIC_TIME_GET)
     sub(TOPIC_TIME_NTP)
@@ -50,7 +51,7 @@ def _mqtt_message(topic, msg):
     print("Message received", topic, msg)
     topic = topic.decode()
     msg = msg.decode()
-    if topic == "hello/whos-there":
+    if topic == TOPIC_HELLO_WHOS_THERE:
         _client.publish("hello", settings.MQTT_CLIENT_ID)
     elif topic == TOPIC_PING:
         _client.publish(TOPIC_PONG, f"{time.localtime()}: {msg}")
@@ -73,7 +74,11 @@ def pump():
         print("MQTT message pump", _client)
 
     if _client is not None:
-        _client.check_msg()
+        try:
+            _client.check_msg()
+        except Exception as e:
+            if _debug_mode:
+                print("Failed to process MQTT message pump", e)
 
 
 def publish(topic: str, payload: str):
