@@ -30,7 +30,7 @@ class WatchdogTimer:
     def feed(self):
         self._counter = self._timeout
 
-    def _validate(self, _):
+    def _validate(self, *_):
         self._counter -= 1
 
         if self._counter > 0:

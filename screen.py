@@ -5,8 +5,12 @@ import util
 from writer import Writer
 from fonts import arial10, arial35, arial50
 import mqtt
+import gc
+import _thread
+import machine
 
 _debug_mode = False
+_draw_thread: int | None = None
 
 
 def debug_mode(enabled: bool):
@@ -151,6 +155,44 @@ def debug_update_display(gusts=88.88):
 
 
 def update_display(weather, limits, battery_stats):
+    global _draw_thread
+
+    if _debug_mode:
+        print("Updating screen", weather, limits, battery_stats)
+
+    def _upd(weather, limits, battery_stats):
+        global _draw_thread
+
+        try:
+            _update_display(weather, limits, battery_stats)
+        except Exception as e:
+            print("Error updating screen", e)
+        finally:
+            _draw_thread = None
+
+    if _draw_thread is not None:
+        if _debug_mode:
+            print("Screen already updating.")
+
+        return
+    
+    _draw_thread = _thread.start_new_thread(_upd, (weather, limits, battery_stats))
+    mqtt.publish(mqtt.TOPIC_REFRESH_STARTED, str(weather))
+
+
+def _debug_step(id, **kwargs):
+    data = {
+        "gc": {"free": gc.mem_free(), "alloc": gc.mem_alloc()},
+        "ticks_ms": time.ticks_ms(),
+    }
+    print(f"_debug_step: {data}")
+    try:
+        print("_debug_step: kwargs: ", kwargs)
+    except Exception as e:
+        print("_debug_step: Failed to print kwargs: ", e)
+
+
+def _update_display(weather, limits, battery_stats):
     global epd, black_proxy, red_proxy
 
     gc.collect()
@@ -196,6 +238,8 @@ def update_display(weather, limits, battery_stats):
 
     line += 60
 
+    _debug_step("feels like")
+
     # Humidity
     val = weather["humidity"]
     writer = w35black if within_limits("humidity", val) else w35red
@@ -221,6 +265,8 @@ def update_display(weather, limits, battery_stats):
     w10black.printstring(s)
     line += 40
 
+    _debug_step("humidity and hi/lo")
+
     # Wind speed + direction
     val = round(weather["wind"]["speed"])
     writer = w35black if within_limits("wind", val) else w35red
@@ -245,6 +291,8 @@ def update_display(weather, limits, battery_stats):
     w10black.printstring(s)
     line += 40
 
+    _debug_step("wind")
+
     # Sunrise and sunset
     (_, _, _, hour, minute, *_) = util.localtime(weather["sunrise"])
     s = f"Sunrise: {hour}:{minute}"
@@ -267,12 +315,16 @@ def update_display(weather, limits, battery_stats):
     DebugWriter.set_textpos(black_proxy, line, 0)
     w35black.printstring(s)
 
+    _debug_step("sun time, pressure")
+
     # Last update time, voltage; pinned at bottom
     line = black_proxy.height - 10
     (year, month, day, hour, minute, second, *_) = util.localtime(weather["timestamp"])
     s = f"{year}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}"
     center_string(w10black, s, line)
     w10black.printstring(s)
+
+    _debug_step("current date/time")
 
     if not battery_stats["charging"]:
         p = battery_stats["level"] * 100
@@ -285,7 +337,8 @@ def update_display(weather, limits, battery_stats):
     epd.display()
     epd.sleep()
 
-    mqtt.publish(mqtt.TOPIC_UPDATED, str(weather))
+    machine.schedule(lambda _: mqtt.publish(mqtt.TOPIC_REFRESH_STARTED, str(weather)), None)
+    _debug_step("final")
     gc.collect()
 
 

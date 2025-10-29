@@ -18,7 +18,8 @@ TOPIC_PONG = f"{TOPIC_BASE}/pong"
 TOPIC_TIME_GET = f"{TOPIC_BASE}/time/get"
 TOPIC_TIME_NTP = f"{TOPIC_BASE}/time/ntp"
 TOPIC_REFRESH = f"{TOPIC_BASE}/refresh"
-TOPIC_UPDATED = f"{TOPIC_BASE}/updated"
+TOPIC_REFRESH_STARTED = f"{TOPIC_BASE}/refresh/started"
+TOPIC_REFRESH_FINISHED = f"{TOPIC_BASE}/refresh/finished"
 TOPIC_WEATHER_REFRESH = f"{TOPIC_BASE}/weather/refresh"
 
 
